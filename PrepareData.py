@@ -195,7 +195,7 @@ class ParentDataset(Dataset):
             "one_hot" : data['one_hot']
         }
         
-def CreateDataloaders( dataset, sizes = [0.9, 0.1, 0.1], batch_size=128, num_workers=16, shuffle=True):
+def CreateDataloaders( dataset, sizes = [0.8, 0.1, 0.1], batch_size=128, num_workers=16, shuffle=True):
     
     train_size = int(len(dataset)*sizes[0])
     test_size = int(len(dataset)*(sizes[1]))
