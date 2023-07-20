@@ -109,6 +109,12 @@ def validate(config, model, dataloader, epoch, optimizer, loss_fn):
         running_loss.append([total_loss.item(), clip_loss.item(), reconstruction_loss.item()])
         
     running_loss = np.array(running_loss)
+    plt.hist(running_loss[:,0], label="Val Total Loss")
+    plt.hist(running_loss[:,1], label="val Clip Loss")
+    plt.hist(running_loss[:,2], label="val Recon Loss")
+    plt.legend()
+    wandb.log({"Validation Loss Distribution":plt}, step=epoch)
+    plt.clf()
     return np.mean(running_loss, axis = 0)
 
 
@@ -144,7 +150,7 @@ def load_model(path_to_dir):
     model.load_state_dict(torch.load(model_path))
     return model
 
-def update_logs_and_checkpoints(model, config, tl, vl, epoch, logs):
+def update_logs_and_checkpoints(config, model, tl, vl, epoch, logs):
     logs['train_total_loss'].append(tl[0])
     logs['train_clip_loss'].append(tl[1])
     logs['train_recon_loss'].append(tl[2])
@@ -177,13 +183,12 @@ def print_status(logs, time=None):
     print("Best Test_Loss: {}, Best Epoch: {}".format( logs['best_total_loss'],logs['best_epoch']))
     print("=============== Time: {}========================".format(time))
   
-  
 def train_clip(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs=50 ):
     for epoch in range(num_epochs):
         start = time.time()
         tl = train_one_epoch(config, model, dataloaders['train'], epoch, optimizer, loss_fn , focus="clip_loss")
         vl = validate(config, model, dataloaders['val'], epoch, optimizer, loss_fn )
-        logs = update_logs_and_checkpoints(model, tl, vl, epoch, logs)
+        logs = update_logs_and_checkpoints(config, model, tl, vl, epoch, logs)
         end = time.time()
         
         wandb.log(
@@ -198,7 +203,7 @@ def train_clip(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs=
             },
             step = epoch
         )
-        clip_performance(model, dataloaders, epoch)
+        clip_performance(config, model, dataloaders, epoch)
         print_status(logs, end-start)
     return logs
 
@@ -207,7 +212,7 @@ def train_recon(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs
         start = time.time()
         tl = train_one_epoch(config, model, dataloaders['train'], epoch, optimizer, loss_fn , focus="reconstruction_loss")
         vl = validate(config, model, dataloaders['val'], epoch, optimizer, loss_fn )
-        logs = update_logs_and_checkpoints(model, tl, vl, epoch, logs)
+        logs = update_logs_and_checkpoints(config, model, tl, vl, epoch, logs)
         end = time.time()
         
         wandb.log(
@@ -230,7 +235,7 @@ def train_total(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs
         start = time.time()
         tl = train_one_epoch(config, model, dataloaders['train'], epoch, optimizer, loss_fn , focus="total_loss")
         vl = validate(config, model, dataloaders['val'], epoch, optimizer, loss_fn )
-        logs = update_logs_and_checkpoints(model, tl, vl, epoch, logs)
+        logs = update_logs_and_checkpoints(config, model, tl, vl, epoch, logs)
         end = time.time()
         
         wandb.log(
@@ -248,7 +253,7 @@ def train_total(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs
         print_status(logs, end-start)
     return logs
 
-def top_scores(mat1, mat2, offset):
+def top_scores(mat1, mat2):
     """
     mat1 is [testset]
     mat2 is  [testset + trainset]
@@ -266,6 +271,7 @@ def top_scores(mat1, mat2, offset):
                 score[k] += 1
         score[k] = score[k] / len(row)
         # break
+    del sims
     return np.array(tops), np.array(score)
 
 # %matplotlib inline
@@ -280,11 +286,20 @@ def distance_distribution(molmat, specmat):
     df['distance'] = vals
     df['labels'] = pairs + nonpairs
     sns.histplot(df, x='distance', hue='labels', kde=True, bins=50)
-     
+    del sims, diagonals,  vals, df
     return plt
 
-def clip_performance(model, dataloaders, epoch):
+def distance_mat(molmat, specmat):
+    sims = specmat @ molmat.t()
+    img = sns.heatmap(data=sims, annot=None)
+    del sims
+    return img
+
+def clip_performance(config, model, dataloaders, epoch):
     model.eval()
+    max_charge = config['data']['max_charge']
+    num_species = config['data']['num_species']
+
     molembeds = []
     specembeds = []
     for i, data in tqdm(enumerate(dataloaders['test'])):    
@@ -301,27 +316,32 @@ def clip_performance(model, dataloaders, epoch):
         with torch.no_grad():
             mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data, max_charge, num_species)
             molembeds.append(mol_latents)
-            specembeds.append(spec_latents)
+            # specembeds.append(spec_latents)
     train_molembeds = torch.cat(molembeds, 0)
-    train_specembeds = torch.cat(specembeds, 0)
+    # train_specembeds = torch.cat(specembeds, 0)
     
     all_molembeds = torch.cat(( test_molembeds, train_molembeds), axis = 0)
     
     all_molembeds = all_molembeds.to("cpu")
     train_molembeds = train_molembeds.to("cpu")
-    train_specembeds = train_specembeds.to("cpu")
+    # train_specembeds = train_specembeds.to("cpu")
     test_molembeds = test_molembeds.to("cpu")
     test_specembeds = test_specembeds.to("cpu")
     
-    tops, scores, hits = top_scores(test_specembeds, all_molembeds)
+    tops, scores = top_scores(test_specembeds, all_molembeds)
+    del all_molembeds
+    
     for k, acc in zip(tops, scores):
         # print("Full Top {} Spec".format(k), acc)
         wandb.log({"Full Top {} Spec".format(k): acc}, step=epoch)
     
-    tops, scores, hits = top_scores(test_specembeds, test_molembeds )
+    tops, scores = top_scores(test_specembeds, test_molembeds )
     for k, acc in zip(tops, scores):
         # print("Test Top {} Spec".format(k), acc)
         wandb.log({"Test Top {} Spec".format(k): acc}, step=epoch)
 
-    wandb.log({'Distance Distribution Train': distance_distribution(train_molembeds, train_specembeds)}, step=epoch) 
+    # wandb.log({'Distance Distribution Train': distance_distribution(train_molembeds, train_specembeds)}, step=epoch) 
+    # del train_molembeds, train_specembeds
     wandb.log({'Distance Distribution Test': distance_distribution(test_molembeds, test_specembeds)}, step=epoch) 
+    wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
+    
