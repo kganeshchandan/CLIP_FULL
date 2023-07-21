@@ -40,8 +40,11 @@ class CombinedLoss(nn.Module):
     def forward(self, mol_features, spectra_features, logit_scale, smile_ypred, data):
         # spectra = spectra.squeeze(1)
         # spectra = spectra.squeeze(1)
+        # print(logit_scale)
+        # print(mol_features.shape)
+        # print(spectra_features.shape)
         
-        logits = logit_scale *  mol_features @ spectra_features.t() 
+        logits = logit_scale[0] *  mol_features @ spectra_features.t() 
         
         mol_sims = mol_features @ mol_features.t()
         spectra_sims = spectra_features @ spectra_features.t()
@@ -75,7 +78,7 @@ def train_one_epoch( config, model, dataloader, epoch, optimizer, loss_fn, focus
         optimizer.zero_grad()
         data = {k: v.to(device) for k, v in data.items()}
         
-        mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data, max_charge, num_species)
+        mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
         total_loss, clip_loss, reconstruction_loss = loss_fn(mol_latents, spec_latents, logit_scale, smile_preds, data)
         
         if focus == "total_loss":
@@ -103,7 +106,7 @@ def validate(config, model, dataloader, epoch, optimizer, loss_fn):
     
     for i, data in enumerate(dataloader):    
         with torch.no_grad():
-            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data, max_charge, num_species)
+            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
             total_loss, clip_loss, reconstruction_loss = loss_fn(mol_latents, spec_latents, logit_scale, smile_preds, data)
     
         print( 'Validation Epoch: {} | iteration: {}/{} | Loss: {}'.format(epoch, i, len(dataloader), total_loss.item() ), end='\r')
@@ -257,24 +260,29 @@ def train_total(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs
 
 def top_scores(mat1, mat2):
     """
-    mat1 is [testset]
-    mat2 is  [testset + trainset]
-    
+    mat1 is the first mat
+    mat2 is the second mat
+    d = []
+    for i in mat1:
+        for j in mat2:
+            closest between i and j
+            d.append(rank)
     """
     hits = []
-    tops = [1,2,3,4,5,10]
+    tops = [1,2,3,4,5, 7, 10]
     score = [0] * (len(tops))
 
-    sims = mat1 @ mat2.t() # sims shape is [test_size, test+train_size]
-    for k in range(len(tops)):
-        for i, row in enumerate(sims):
-            max_sims, ids = torch.topk(row, tops[k])
-            if i in ids:
+    for i in range(mat1.shape[0]):
+        sims = mat2 @ mat1[i].t()
+        for k in range(len(tops)):
+            max_sims, ids = torch.topk(sims, tops[k])
+            if (i) in ids:
                 score[k] += 1
-        score[k] = score[k] / len(row)
-        # break
-    del sims
-    return np.array(tops), np.array(score) * 100
+
+    for i in range(len(tops)):
+        score[i] = score[i] / mat1.shape[0]
+
+    return np.array(tops), np.array(score ) * 100
 
 # %matplotlib inline
 def distance_distribution(molmat, specmat):
@@ -304,9 +312,9 @@ def clip_performance(config, model, dataloaders, epoch):
 
     molembeds = []
     specembeds = []
-    for i, data in tqdm(enumerate(dataloaders['test'])):    
+    for i, data in tqdm(enumerate(dataloaders['val'])):    
         with torch.no_grad():
-            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data, max_charge, num_species)
+            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
             molembeds.append(mol_latents)
             specembeds.append(spec_latents)
     test_molembeds = torch.cat(molembeds, 0)
@@ -316,7 +324,7 @@ def clip_performance(config, model, dataloaders, epoch):
     specembeds = []
     for i, data in tqdm(enumerate(dataloaders['train'])):    
         with torch.no_grad():
-            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data, max_charge, num_species)
+            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
             molembeds.append(mol_latents)
             # specembeds.append(spec_latents)
     train_molembeds = torch.cat(molembeds, 0)

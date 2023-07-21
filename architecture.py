@@ -24,6 +24,8 @@ class CLIP(nn.Module):
         self.config = config
         self.vocab = pickle.load(open(config['data']['vocab_path'], 'rb'))
         self.temperature = config['train']['temperature']
+        self.max_charge = config['data']['max_charge']
+        self.num_species = config['data']['num_species']
         
         self.Molecule_Encoder = EGNN(
              in_node_nf = self.config['molecule_encoder']['in_node_nf'], 
@@ -61,7 +63,7 @@ class CLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * self.temperature)
         
     
-    def forward_mol(self, data, max_charge, num_species):
+    def forward_mol(self, data):
         batch_size = self.config['data']['batch_size']
         batch_size, n_nodes, _ = data['positions'].size()
         atom_positions = data['positions'].view(batch_size * n_nodes, -1).to(device, dtype)
@@ -70,7 +72,7 @@ class CLIP(nn.Module):
         one_hot = data['one_hot'].to(device, dtype)
         charges = data['charges'].to(device, dtype)
         
-        charge_scale = max_charge
+        charge_scale = 9
     
         nodes = qm9_utils.preprocess_input(one_hot, 
                                     charges,
@@ -115,10 +117,10 @@ class CLIP(nn.Module):
                                    tgt_padding_mask)
         return pred
         
-    def forward(self, data, max_charge, num_species):
+    def forward(self, data):
         logits_scale = self.logit_scale.exp()
         
-        mol_latents = self.forward_mol(data, max_charge, num_species)
+        mol_latents = self.forward_mol(data)
         spec_latents = self.forward_spec(data)
         
         smile_preds = self.forward_decoder(data, spec_latents)

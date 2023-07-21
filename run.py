@@ -8,7 +8,7 @@ config['data'] = {"qm9_broad_ir_path":'/home2/kanakala.ganesh/ir_data/qm9_broad_
                         },
                   "normalization" : "unit",
                   "shuffle": True,
-                  "batch_size":256,
+                  "batch_size":500,
                   "seq_len":70,
                   "splits":[0.8, 0.1, 0.1],
                   "num_workers":20
@@ -146,8 +146,7 @@ def run(config):
         print("Starting Training")
         
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
-        train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 200)
-        train_recon(config, model, dataloaders, optimizer, loss_fn, logs,  100)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 100)
-        
+        # train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 200)
+        # train_recon(config, model, dataloaders, optimizer, loss_fn, logs,  100)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 300)
 run(config)
