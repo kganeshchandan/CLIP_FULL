@@ -73,6 +73,7 @@ def train_one_epoch( config, model, dataloader, epoch, optimizer, loss_fn, focus
     for i, data in enumerate(dataloader):
         
         optimizer.zero_grad()
+        data = {k: v.to(device) for k, v in data.items()}
         
         mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data, max_charge, num_species)
         total_loss, clip_loss, reconstruction_loss = loss_fn(mol_latents, spec_latents, logit_scale, smile_preds, data)
@@ -109,12 +110,12 @@ def validate(config, model, dataloader, epoch, optimizer, loss_fn):
         running_loss.append([total_loss.item(), clip_loss.item(), reconstruction_loss.item()])
         
     running_loss = np.array(running_loss)
-    plt.hist(running_loss[:,0], label="Val Total Loss")
-    plt.hist(running_loss[:,1], label="val Clip Loss")
-    plt.hist(running_loss[:,2], label="val Recon Loss")
-    plt.legend()
-    wandb.log({"Validation Loss Distribution":plt}, step=epoch)
     plt.clf()
+    df = pd.DataFrame(running_loss, columns=['ttl_loss', 'clip_loss', 'recon_loss'])
+    plot = sns.histplot(df, kde=True, bins=50)
+    wandb.log({"Validation Loss Distribution":wandb.Image(plot)}, step=epoch)
+    plt.clf()
+    del plot
     return np.mean(running_loss, axis = 0)
 
 
@@ -203,7 +204,8 @@ def train_clip(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs=
             },
             step = epoch
         )
-        clip_performance(config, model, dataloaders, epoch)
+        if epoch % 10 == 0:
+            clip_performance(config, model, dataloaders, epoch)
         print_status(logs, end-start)
     return logs
 
@@ -272,25 +274,25 @@ def top_scores(mat1, mat2):
         score[k] = score[k] / len(row)
         # break
     del sims
-    return np.array(tops), np.array(score)
+    return np.array(tops), np.array(score) * 100
 
 # %matplotlib inline
 def distance_distribution(molmat, specmat):
     sims = molmat @ specmat.t()
-    diagonals = torch.diagonal(sims, 0).detach().numpy()
-    sims = np.random.choice(sims.view(-1).detach().numpy(), len(diagonals))
+    diagonals = torch.diagonal(sims, 0).cpu().numpy()
+    sims = np.random.choice(sims.view(-1).cpu().numpy(), len(diagonals))
     vals = np.concatenate((sims, diagonals), axis=0)
     pairs = ["pairs"] * len(diagonals)
     nonpairs = ["others"] * len(sims)
     df = pd.DataFrame()
     df['distance'] = vals
     df['labels'] = pairs + nonpairs
-    sns.histplot(df, x='distance', hue='labels', kde=True, bins=50)
+    plot = sns.histplot(df, x='distance', hue='labels', kde=True, bins=50)
     del sims, diagonals,  vals, df
-    return plt
+    return plot
 
 def distance_mat(molmat, specmat):
-    sims = specmat @ molmat.t()
+    sims = specmat.cpu() @ molmat.t().cpu()
     img = sns.heatmap(data=sims, annot=None)
     del sims
     return img
@@ -321,12 +323,13 @@ def clip_performance(config, model, dataloaders, epoch):
     # train_specembeds = torch.cat(specembeds, 0)
     
     all_molembeds = torch.cat(( test_molembeds, train_molembeds), axis = 0)
-    
-    all_molembeds = all_molembeds.to("cpu")
-    train_molembeds = train_molembeds.to("cpu")
+    del train_molembeds
+
+    #all_molembeds = all_molembeds.to("cpu")
+    #train_molembeds = train_molembeds.to("cpu")
     # train_specembeds = train_specembeds.to("cpu")
-    test_molembeds = test_molembeds.to("cpu")
-    test_specembeds = test_specembeds.to("cpu")
+    #test_molembeds = test_molembeds.to("cpu")
+    #test_specembeds = test_specembeds.to("cpu")
     
     tops, scores = top_scores(test_specembeds, all_molembeds)
     del all_molembeds
@@ -342,6 +345,6 @@ def clip_performance(config, model, dataloaders, epoch):
 
     # wandb.log({'Distance Distribution Train': distance_distribution(train_molembeds, train_specembeds)}, step=epoch) 
     # del train_molembeds, train_specembeds
-    wandb.log({'Distance Distribution Test': distance_distribution(test_molembeds, test_specembeds)}, step=epoch) 
-    wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
+    wandb.log({'Distance Distribution Test': wandb.Image(distance_distribution(test_molembeds, test_specembeds))}, step=epoch) 
+   # wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
     
