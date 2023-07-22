@@ -187,8 +187,8 @@ def print_status(logs, time=None):
     print("Best Test_Loss: {}, Best Epoch: {}".format( logs['best_total_loss'],logs['best_epoch']))
     print("=============== Time: {}========================".format(time))
   
-def train_clip(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs=50 ):
-    for epoch in range(num_epochs):
+def train_clip(config, model, dataloaders, optimizer, loss_fn, logs, start=0, num_epochs=50 ):
+    for epoch in range(start,num_epochs):
         start = time.time()
         tl = train_one_epoch(config, model, dataloaders['train'], epoch, optimizer, loss_fn , focus="clip_loss")
         vl = validate(config, model, dataloaders['val'], epoch, optimizer, loss_fn )
@@ -212,8 +212,8 @@ def train_clip(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs=
         print_status(logs, end-start)
     return logs
 
-def train_recon(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs=50 ):
-    for epoch in range(num_epochs):
+def train_recon(config, model, dataloaders, optimizer, loss_fn, logs, start=0, num_epochs=50 ):
+    for epoch in range(start, num_epochs):
         start = time.time()
         tl = train_one_epoch(config, model, dataloaders['train'], epoch, optimizer, loss_fn , focus="reconstruction_loss")
         vl = validate(config, model, dataloaders['val'], epoch, optimizer, loss_fn )
@@ -232,11 +232,13 @@ def train_recon(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs
             },
             step = epoch
         )
+        if epoch % 10 == 0:
+            clip_performance(config, model, dataloaders, epoch)
         print_status(logs, end-start)
     return logs
 
-def train_total(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs=50 ):
-    for epoch in range(num_epochs):
+def train_total(config, model, dataloaders, optimizer, loss_fn, logs, start=0, num_epochs=50 ):
+    for epoch in range(start, num_epochs):
         start = time.time()
         tl = train_one_epoch(config, model, dataloaders['train'], epoch, optimizer, loss_fn , focus="total_loss")
         vl = validate(config, model, dataloaders['val'], epoch, optimizer, loss_fn )
@@ -255,6 +257,8 @@ def train_total(config, model, dataloaders, optimizer, loss_fn, logs, num_epochs
             },
             step = epoch
         )
+        if epoch % 10 == 0:
+            clip_performance(config, model, dataloaders, epoch)
         print_status(logs, end-start)
     return logs
 

@@ -38,9 +38,9 @@ config['spectra_encoder'] = {
     'd_ff': 1024,
     'dropout': 0.0,
     'dropout_emb': 0.1,
-    'h_dim': 128,
+    'h_dim': 256,
     'max_time_steps': 1000,
-    'num_heads': 5,
+    'num_heads': 7,
     'num_layers': 5,
     'output_size': 512,
     'patch_size': 7,
@@ -53,7 +53,7 @@ config['train'] = {
     'checkpoint_dir': "checkpoints/temp",
     'device':"cuda",
     'num_epochs':100,
-    'threshold': 0.99,
+    'threshold': 0.9999,
     'weight_decay': 1.0e-06
 }
 
@@ -146,7 +146,7 @@ def run(config):
         print("Starting Training")
         
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
-        # train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 200)
-        # train_recon(config, model, dataloaders, optimizer, loss_fn, logs,  100)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 300)
+        train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 200)
+        train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 200, 300)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 300,400)
 run(config)
