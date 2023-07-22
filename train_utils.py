@@ -105,9 +105,9 @@ def validate(config, model, dataloader, epoch, optimizer, loss_fn):
     num_species = config['data']['num_species']
     
     for i, data in enumerate(dataloader):    
-        with torch.no_grad():
-            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
-            total_loss, clip_loss, reconstruction_loss = loss_fn(mol_latents, spec_latents, logit_scale, smile_preds, data)
+        data = {k: v.to(device) for k, v in data.items()}
+        mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
+        total_loss, clip_loss, reconstruction_loss = loss_fn(mol_latents, spec_latents, logit_scale, smile_preds, data)
     
         print( 'Validation Epoch: {} | iteration: {}/{} | Loss: {}'.format(epoch, i, len(dataloader), total_loss.item() ), end='\r')
         running_loss.append([total_loss.item(), clip_loss.item(), reconstruction_loss.item()])
@@ -119,6 +119,7 @@ def validate(config, model, dataloader, epoch, optimizer, loss_fn):
     wandb.log({"Validation Loss Distribution":wandb.Image(plot)}, step=epoch)
     plt.clf()
     del plot
+    model.train()
     return np.mean(running_loss, axis = 0)
 
 
@@ -310,6 +311,7 @@ def distance_mat(molmat, specmat):
     return img
 
 def clip_performance(config, model, dataloaders, epoch):
+    # model.to(device)
     model.eval()
     max_charge = config['data']['max_charge']
     num_species = config['data']['num_species']
@@ -317,20 +319,21 @@ def clip_performance(config, model, dataloaders, epoch):
     molembeds = []
     specembeds = []
     for i, data in tqdm(enumerate(dataloaders['val'])):    
-        with torch.no_grad():
-            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
-            molembeds.append(mol_latents)
-            specembeds.append(spec_latents)
+        data = {k: v.to(device) for k, v in data.items()}
+        mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
+        molembeds.append(mol_latents.detach().cpu())
+        specembeds.append(spec_latents.detach().cpu())
+
     test_molembeds = torch.cat(molembeds, 0)
     test_specembeds = torch.cat(specembeds, 0)
     
     molembeds = []
     specembeds = []
     for i, data in tqdm(enumerate(dataloaders['train'])):    
-        with torch.no_grad():
-            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
-            molembeds.append(mol_latents)
-            # specembeds.append(spec_latents)
+        data = {k: v.to(device) for k, v in data.items()}
+        mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
+        molembeds.append(mol_latents.detach().cpu())
+            # specembeds.append(spec_latents.detach().cpu())
     train_molembeds = torch.cat(molembeds, 0)
     # train_specembeds = torch.cat(specembeds, 0)
     
@@ -349,7 +352,8 @@ def clip_performance(config, model, dataloaders, epoch):
     for k, acc in zip(tops, scores):
         # print("Full Top {} Spec".format(k), acc)
         wandb.log({"Full Top {} Spec".format(k): acc}, step=epoch)
-    
+        
+
     tops, scores = top_scores(test_specembeds, test_molembeds )
     for k, acc in zip(tops, scores):
         # print("Test Top {} Spec".format(k), acc)
@@ -359,4 +363,5 @@ def clip_performance(config, model, dataloaders, epoch):
     # del train_molembeds, train_specembeds
     wandb.log({'Distance Distribution Test': wandb.Image(distance_distribution(test_molembeds, test_specembeds))}, step=epoch) 
    # wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
-    
+    del test_molembeds, test_specembeds
+    model.train()
