@@ -149,6 +149,6 @@ def run(config):
         
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
         #train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 200)
-        #train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 200, 300)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 00,400)
+        train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 200)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 200,400)
 run(config)

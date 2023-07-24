@@ -89,7 +89,8 @@ def train_one_epoch( config, model, dataloader, epoch, optimizer, loss_fn, focus
             reconstruction_loss.backward()
             
         optimizer.step()
-        
+        nn.utils.clip_grad_value_(model.parameters(), clip_value=1.0)
+
         print( 'Training Epoch: {} | iteration: {}/{} | Loss: {}'.format(epoch, i, len(dataloader), total_loss.item() ), end='\r')
         running_loss.append([total_loss.item(), clip_loss.item(), reconstruction_loss.item()])
     
@@ -178,7 +179,9 @@ def update_logs_and_checkpoints(config, model, tl, vl, epoch, logs):
         logs['best_recon_loss'] = vl[2]
         logs['best_recon_epoch'] = epoch
         save_model(model, config, logs, 'best_recon')
-                
+              
+    for key in logs:
+        wandb.log({key:logs[key]}, step=epoch)  
     return logs
 
 def print_status(logs, time=None):

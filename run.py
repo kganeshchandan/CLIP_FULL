@@ -8,7 +8,7 @@ config['data'] = {"qm9_broad_ir_path":'/home2/kanakala.ganesh/ir_data/qm9_broad_
                         },
                   "normalization" : "unit",
                   "shuffle": True,
-                  "batch_size":500,
+                  "batch_size":250,
                   "seq_len":70,
                   "splits":[0.8, 0.1, 0.1],
                   "num_workers":20
@@ -35,15 +35,15 @@ config['molecule_decoder'] = {
 }
 
 config['spectra_encoder'] = {
-    'd_ff': 1024,
-    'dropout': 0.0,
+    'd_ff': 512,
+    'dropout': 0.1,
     'dropout_emb': 0.1,
-    'h_dim': 256,
-    'max_time_steps': 1000,
+    'h_dim': 512,
+    'max_time_steps': 500,
     'num_heads': 7,
     'num_layers': 5,
     'output_size': 512,
-    'patch_size': 7,
+    'patch_size': 9 ,
     'use_clf_token': True,
 }
 
@@ -61,7 +61,7 @@ config['wandb'] = {
     "dir": "/scratch/kanakala.ganesh/",
     "job_type": "sample",
     "project_name": "CLIP_Full_testing",
-    "run_name": "RUN_testing"
+    "run_name": "RUN_testing_gradnorm2"
 }
 config['data']['max_charge'] = None
 config['data']['num_species'] = None
@@ -146,7 +146,7 @@ def run(config):
         print("Starting Training")
         
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
-        train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 200)
-        train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 200, 300)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 300,400)
+        #train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 200)
+        #train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 200, 300)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,500)
 run(config)

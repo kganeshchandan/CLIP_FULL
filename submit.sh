@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:2
 #SBATCH --mail-user=kanakala.ganesh@research.iiit.ac.in
 #SBATCH --mail-type=ALL
-#SBATCH --output=outputs/op_file_multigpu_smiles_correct_total.txt
+#SBATCH --output=outputs/op_file_multigpu_total_clipgrad2.txt
 
 #wget http://www.bindingmoad.org/files/biou/every_part_a.zip
 #wget http://www.bindingmoad.org/files/biou/every_part_b.zip
@@ -17,4 +17,4 @@
 #python sample_run.py
 
 
-python run_smiles.py
+python run.py
