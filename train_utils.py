@@ -312,13 +312,15 @@ def distance_distribution(molmat, specmat):
     return plot
 
 def distance_mat(molmat, specmat):
-    sims = specmat.cpu() @ molmat.t().cpu()
+    sims = specmat[:1000].cpu() @ molmat.t()[:,:1000].cpu()
+    plt.clf()
     img = sns.heatmap(data=sims, annot=None)
     del sims
     return img
 
 def decoder_performance(config, model, dataloaders, epoch):
     model.eval()
+    vocab = pickle.load(open(config['data']['vocab_path'], 'rb'))
     acc = []
     validity = []
     with torch.no_grad():
@@ -326,32 +328,31 @@ def decoder_performance(config, model, dataloaders, epoch):
             data = {k: v.to(device) for k, v in data.items()}
             smi = data['decoder_inp']
             y = data['decoder_tgt']
-            spec = model.forward_spec(data)
-            pred = model.forward_decoder(data, spec)
+            _, spec, pred, _, _ = model(data)
+            # spec = model.forward_spec(data)
+            # pred = model.forward_decoder(data, spec)
             y_pred = torch.argmax(pred, dim=2)
-            break
-        vocab = model.vocab
-        equal_count= 0
-        validity_count = 0
-        for i in range(spec.shape[0]):
-            og_smile = ""
-            for char in vocab.from_seq(y[i]):
-                if char != "<pad>" and char != "<eos>":
-                    og_smile += char
-            pred_smile = ""
-            for char in vocab.from_seq(y_pred[i]):
-                if char != "<pad>" and char != "<eos>":
-                    pred_smile += char
-            if og_smile == pred_smile:
-                equal_count  += 1
-            m = Chem.MolFromSmiles(pred_smile)
-            if m is not None:
-                validity_count += 1
-        acc.append(equal_count / spec.shape[0])
-        validity.append(validity_count / spec.shape[0])
-            
-        wandb.log({ "accuracy" : np.array(acc).mean() }, step=epoch)  
-        wandb.log({"validity":np.array(validity).mean()}, step=epoch) 
+            equal_count= 0
+            validity_count = 0
+            for i in range(spec.shape[0]):
+                og_smile = ""
+                for char in vocab.from_seq(y[i]):
+                    if char != "<pad>" and char != "<eos>":
+                        og_smile += char
+                pred_smile = ""
+                for char in vocab.from_seq(y_pred[i]):
+                    if char != "<pad>" and char != "<eos>":
+                        pred_smile += char
+                if og_smile == pred_smile:
+                    equal_count  += 1
+                m = Chem.MolFromSmiles(pred_smile)
+                if m is not None:
+                    validity_count += 1
+            acc.append(equal_count / spec.shape[0])
+            validity.append(validity_count / spec.shape[0])
+        print("Acc :",np.array(acc).mean(), " validity: ", np.array(validity).mean())
+    wandb.log({ "accuracy" : np.array(acc).mean() }, step=epoch)  
+    wandb.log({"validity":np.array(validity).mean()}, step=epoch) 
         
 
 def clip_performance(config, model, dataloaders, epoch):
@@ -388,12 +389,6 @@ def clip_performance(config, model, dataloaders, epoch):
     
     all_molembeds = torch.cat(( test_molembeds, train_molembeds), axis = 0)
     del train_molembeds
-
-    #all_molembeds = all_molembeds.to("cpu")
-    #train_molembeds = train_molembeds.to("cpu")
-    # train_specembeds = train_specembeds.to("cpu")
-    #test_molembeds = test_molembeds.to("cpu")
-    #test_specembeds = test_specembeds.to("cpu")
     
     tops, scores = top_scores(test_specembeds, all_molembeds)
     del all_molembeds
@@ -411,7 +406,10 @@ def clip_performance(config, model, dataloaders, epoch):
     # wandb.log({'Distance Distribution Train': distance_distribution(train_molembeds, train_specembeds)}, step=epoch) 
     # del train_molembeds, train_specembeds
     wandb.log({'Distance Distribution Test': wandb.Image(distance_distribution(test_molembeds, test_specembeds))}, step=epoch) 
+    plt.clf()
     wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
-    decoder_performance(config, model, dataloaders['val'], epoch)
+    plt.clf()
+    decoder_performance(config, model, dataloaders, epoch)
     del test_molembeds, test_specembeds
     model.train()
+    plt.clf()
