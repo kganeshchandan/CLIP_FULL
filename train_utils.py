@@ -93,25 +93,28 @@ def train_one_epoch( config, model, dataloader, epoch, optimizer, loss_fn, focus
 
         print( 'Training Epoch: {} | iteration: {}/{} | Loss: {}'.format(epoch, i, len(dataloader), total_loss.item() ), end='\r')
         running_loss.append([total_loss.item(), clip_loss.item(), reconstruction_loss.item()])
-    
+        del total_loss, clip_loss, reconstruction_loss, mol_latents, spec_latents, smile_preds, logit_scale
+        
     running_loss = np.array(running_loss)
     return np.mean(running_loss, axis= 0)
 
 def validate(config, model, dataloader, epoch, optimizer, loss_fn):
     
     running_loss = []
-    model.to(device)
+    # model.to(device)
     model.eval()
     max_charge = config['data']['max_charge']
     num_species = config['data']['num_species']
     
-    for i, data in enumerate(dataloader):    
+    # with torch.no_grad():
+    for i, data in enumerate(dataloader):      
         data = {k: v.to(device) for k, v in data.items()}
         mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
         total_loss, clip_loss, reconstruction_loss = loss_fn(mol_latents, spec_latents, logit_scale, smile_preds, data)
     
-        print( 'Validation Epoch: {} | iteration: {}/{} | Loss: {}'.format(epoch, i, len(dataloader), total_loss.item() ), end='\r')
-        running_loss.append([total_loss.item(), clip_loss.item(), reconstruction_loss.item()])
+        print( 'Validation Epoch: {} | iteration: {}/{} | Loss: {}'.format(epoch, i, len(dataloader), total_loss.detach().item() ), end='\r')
+        running_loss.append([total_loss.detach().item(), clip_loss.detach().item(), reconstruction_loss.detach().item()])
+        del total_loss, clip_loss, reconstruction_loss, mol_latents, spec_latents, smile_preds, logit_scale
         
     running_loss = np.array(running_loss)
     plt.clf()
@@ -181,7 +184,8 @@ def update_logs_and_checkpoints(config, model, tl, vl, epoch, logs):
         save_model(model, config, logs, 'best_recon')
               
     for key in logs:
-        wandb.log({key:logs[key]}, step=epoch)  
+        if not isinstance(logs[key], list):
+            wandb.log({key:logs[key]}, step=epoch)  
     return logs
 
 def print_status(logs, time=None):
@@ -313,6 +317,33 @@ def distance_mat(molmat, specmat):
     del sims
     return img
 
+def decoder_performance(config, model, dataloaders, epoch):
+    model.eval()
+    for i, data in enumerate(dataloaders['val']):
+        data = {k: v.to(device) for k, v in data.items()}
+        smi = data['decoder_inp']
+        y = data['decoder_tgt']
+        spec = model.forward_spec(data)
+        pred = model.forward_decoder(data, spec)
+        y_pred = torch.argmax(pred, dim=2)
+        break
+    vocab = model.vocab
+    count = 0
+    for i in range(100):
+        og_smile = ""
+        for char in vocab.from_seq(y[i]):
+            if char != "<pad>":
+                og_smile += char
+        pred_smile = ""
+        for char in vocab.from_seq(y_pred[i]):
+            if char != "<pad>":
+                pred_smile += char
+        if og_smile == pred_smile:
+            count  += 1
+    print("Acc: ",count/100, flush=True)
+    print("\n")
+        
+
 def clip_performance(config, model, dataloaders, epoch):
     # model.to(device)
     model.eval()
@@ -321,22 +352,26 @@ def clip_performance(config, model, dataloaders, epoch):
 
     molembeds = []
     specembeds = []
+    # with torch.no_grad():
     for i, data in tqdm(enumerate(dataloaders['val'])):    
         data = {k: v.to(device) for k, v in data.items()}
         mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
         molembeds.append(mol_latents.detach().cpu())
         specembeds.append(spec_latents.detach().cpu())
+    del mol_latents, spec_latents, smile_preds, logit_scale, ids
 
     test_molembeds = torch.cat(molembeds, 0)
     test_specembeds = torch.cat(specembeds, 0)
     
     molembeds = []
     specembeds = []
+    # with torch.no_grad():
     for i, data in tqdm(enumerate(dataloaders['train'])):    
         data = {k: v.to(device) for k, v in data.items()}
         mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
         molembeds.append(mol_latents.detach().cpu())
             # specembeds.append(spec_latents.detach().cpu())
+    del mol_latents, spec_latents, smile_preds, logit_scale, ids
     train_molembeds = torch.cat(molembeds, 0)
     # train_specembeds = torch.cat(specembeds, 0)
     

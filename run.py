@@ -6,9 +6,9 @@ config['data'] = {"qm9_broad_ir_path":'/home2/kanakala.ganesh/ir_data/qm9_broad_
                         'test':  '/home2/kanakala.ganesh/ir_data/raw_test.pickle',
                         'val':   '/home2/kanakala.ganesh/ir_data/raw_val.pickle'
                         },
-                  "normalization" : "unit",
+                  "normalization" : "minmax",
                   "shuffle": True,
-                  "batch_size":250,
+                  "batch_size":400,
                   "seq_len":70,
                   "splits":[0.8, 0.1, 0.1],
                   "num_workers":20
@@ -21,7 +21,7 @@ config['molecule_encoder'] = {
     'hidden_nf':256,
     'in_edge_nf':0,
     'in_node_nf':15,
-    'n_layers': 3,
+    'n_layers': 5,
     'node_attr': 1,
     'output_size':512
 }
@@ -30,26 +30,26 @@ config['molecule_decoder'] = {
     'in_size': 512,
     'latent_size' : 512,
     'hidden_size': 512,
-    'n_layers' : 5,
+    'n_layers' : 3,
     'n_heads' : 4
 }
 
 config['spectra_encoder'] = {
-    'd_ff': 512,
+    'd_ff': 1024,
     'dropout': 0.1,
     'dropout_emb': 0.1,
     'h_dim': 512,
-    'max_time_steps': 500,
+    'max_time_steps': 1000,
     'num_heads': 7,
     'num_layers': 5,
     'output_size': 512,
-    'patch_size': 9 ,
+    'patch_size': 7 ,
     'use_clf_token': True,
 }
 
 config['train'] = {
     'lr':0.0001,
-    'temperature' :0.1,
+    'temperature' :1,
     'checkpoint_dir': "checkpoints/temp",
     'device':"cuda",
     'num_epochs':100,
@@ -60,7 +60,7 @@ config['train'] = {
 config['wandb'] = {
     "dir": "/scratch/kanakala.ganesh/",
     "job_type": "sample",
-    "project_name": "CLIP_Full_testing",
+    "project_name": "CLIP_Full_minmax",
     "run_name": "RUN_testing_gradnorm2"
 }
 config['data']['max_charge'] = None

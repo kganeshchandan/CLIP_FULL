@@ -6,9 +6,9 @@ config['data'] = {"qm9_broad_ir_path":'/home2/kanakala.ganesh/ir_data/qm9_broad_
                         'test':  '/home2/kanakala.ganesh/ir_data/raw_test.pickle',
                         'val':   '/home2/kanakala.ganesh/ir_data/raw_val.pickle'
                         },
-                  "normalization" : "unit",
+                  "normalization" : "minmax",
                   "shuffle": True,
-                  "batch_size":400,
+                  "batch_size":200,
                   "seq_len":70,
                   "splits":[0.8, 0.1, 0.1],
                   "num_workers":20
@@ -21,7 +21,7 @@ config['molecule_encoder'] = {
     'hidden_nf':256,
     'in_edge_nf':0,
     'in_node_nf':15,
-    'n_layers': 3,
+    'n_layers': 5,
     'node_attr': 1,
     'output_size':512
 }
@@ -30,26 +30,26 @@ config['molecule_decoder'] = {
     'in_size': 512,
     'latent_size' : 512,
     'hidden_size': 512,
-    'n_layers' : 5,
+    'n_layers' : 3,
     'n_heads' : 4
 }
 
 config['spectra_encoder'] = {
     'd_ff': 1024,
-    'dropout': 0.0,
+    'dropout': 0.1,
     'dropout_emb': 0.1,
-    'h_dim': 256,
+    'h_dim': 512,
     'max_time_steps': 1000,
     'num_heads': 7,
     'num_layers': 5,
     'output_size': 512,
-    'patch_size': 7,
+    'patch_size': 7 ,
     'use_clf_token': True,
 }
 
 config['train'] = {
     'lr':0.0001,
-    'temperature' :0.1,
+    'temperature' :1,
     'checkpoint_dir': "checkpoints/temp",
     'device':"cuda",
     'num_epochs':100,
@@ -60,8 +60,8 @@ config['train'] = {
 config['wandb'] = {
     "dir": "/scratch/kanakala.ganesh/",
     "job_type": "sample",
-    "project_name": "CLIP_Full_testing",
-    "run_name": "RUN_testing"
+    "project_name": "CLIP_Full_minmax",
+    "run_name": "RUN_testing_gradnorm_smiles"
 }
 config['data']['max_charge'] = None
 config['data']['num_species'] = None
@@ -102,8 +102,6 @@ from rdkit.Chem import Draw
 import seaborn as sns
 import plotly
 import wandb
-import os 
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 dtype = torch.float32
@@ -149,6 +147,6 @@ def run(config):
         
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
         #train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 200)
-        train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 200)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 200,400)
+        #train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 200, 300)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,500)
 run(config)
