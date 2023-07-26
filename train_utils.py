@@ -92,7 +92,7 @@ def train_one_epoch( config, model, dataloader, epoch, optimizer, loss_fn, focus
         nn.utils.clip_grad_value_(model.parameters(), clip_value=1.0)
 
         print( 'Training Epoch: {} | iteration: {}/{} | Loss: {}'.format(epoch, i, len(dataloader), total_loss.item() ), end='\r')
-        running_loss.append([total_loss.item(), clip_loss.item(), reconstruction_loss.item()])
+        running_loss.append([total_loss.detach().item(), clip_loss.detach().item(), reconstruction_loss.detach().item()])
         del total_loss, clip_loss, reconstruction_loss, mol_latents, spec_latents, smile_preds, logit_scale
         
     running_loss = np.array(running_loss)
@@ -319,29 +319,39 @@ def distance_mat(molmat, specmat):
 
 def decoder_performance(config, model, dataloaders, epoch):
     model.eval()
-    for i, data in enumerate(dataloaders['val']):
-        data = {k: v.to(device) for k, v in data.items()}
-        smi = data['decoder_inp']
-        y = data['decoder_tgt']
-        spec = model.forward_spec(data)
-        pred = model.forward_decoder(data, spec)
-        y_pred = torch.argmax(pred, dim=2)
-        break
-    vocab = model.vocab
-    count = 0
-    for i in range(100):
-        og_smile = ""
-        for char in vocab.from_seq(y[i]):
-            if char != "<pad>":
-                og_smile += char
-        pred_smile = ""
-        for char in vocab.from_seq(y_pred[i]):
-            if char != "<pad>":
-                pred_smile += char
-        if og_smile == pred_smile:
-            count  += 1
-    print("Acc: ",count/100, flush=True)
-    print("\n")
+    acc = []
+    validity = []
+    with torch.no_grad():
+        for i, data in tqdm(enumerate(dataloaders['val'])):
+            data = {k: v.to(device) for k, v in data.items()}
+            smi = data['decoder_inp']
+            y = data['decoder_tgt']
+            spec = model.forward_spec(data)
+            pred = model.forward_decoder(data, spec)
+            y_pred = torch.argmax(pred, dim=2)
+            break
+        vocab = model.vocab
+        equal_count= 0
+        validity_count = 0
+        for i in range(spec.shape[0]):
+            og_smile = ""
+            for char in vocab.from_seq(y[i]):
+                if char != "<pad>" and char != "<eos>":
+                    og_smile += char
+            pred_smile = ""
+            for char in vocab.from_seq(y_pred[i]):
+                if char != "<pad>" and char != "<eos>":
+                    pred_smile += char
+            if og_smile == pred_smile:
+                equal_count  += 1
+            m = Chem.MolFromSmiles(pred_smile)
+            if m is not None:
+                validity_count += 1
+        acc.append(equal_count / spec.shape[0])
+        validity.append(validity_count / spec.shape[0])
+            
+        wandb.log({ "accuracy" : np.array(acc).mean() }, step=epoch)  
+        wandb.log({"validity":np.array(validity).mean()}, step=epoch) 
         
 
 def clip_performance(config, model, dataloaders, epoch):
@@ -352,26 +362,27 @@ def clip_performance(config, model, dataloaders, epoch):
 
     molembeds = []
     specembeds = []
-    # with torch.no_grad():
-    for i, data in tqdm(enumerate(dataloaders['val'])):    
-        data = {k: v.to(device) for k, v in data.items()}
-        mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
-        molembeds.append(mol_latents.detach().cpu())
-        specembeds.append(spec_latents.detach().cpu())
-    del mol_latents, spec_latents, smile_preds, logit_scale, ids
+    with torch.no_grad():
+        for i, data in tqdm(enumerate(dataloaders['val'])):    
+            data = {k: v.to(device) for k, v in data.items()}
+            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
+            molembeds.append(mol_latents.detach().cpu())
+            specembeds.append(spec_latents.detach().cpu())
+        del mol_latents, spec_latents, smile_preds, logit_scale, ids
 
     test_molembeds = torch.cat(molembeds, 0)
     test_specembeds = torch.cat(specembeds, 0)
     
     molembeds = []
     specembeds = []
-    # with torch.no_grad():
-    for i, data in tqdm(enumerate(dataloaders['train'])):    
-        data = {k: v.to(device) for k, v in data.items()}
-        mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
-        molembeds.append(mol_latents.detach().cpu())
-            # specembeds.append(spec_latents.detach().cpu())
-    del mol_latents, spec_latents, smile_preds, logit_scale, ids
+    with torch.no_grad():
+        for i, data in tqdm(enumerate(dataloaders['train'])):    
+            data = {k: v.to(device) for k, v in data.items()}
+            mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
+            molembeds.append(mol_latents.detach().cpu())
+                # specembeds.append(spec_latents.detach().cpu())
+        del mol_latents, spec_latents, smile_preds, logit_scale, ids
+    
     train_molembeds = torch.cat(molembeds, 0)
     # train_specembeds = torch.cat(specembeds, 0)
     
@@ -400,6 +411,7 @@ def clip_performance(config, model, dataloaders, epoch):
     # wandb.log({'Distance Distribution Train': distance_distribution(train_molembeds, train_specembeds)}, step=epoch) 
     # del train_molembeds, train_specembeds
     wandb.log({'Distance Distribution Test': wandb.Image(distance_distribution(test_molembeds, test_specembeds))}, step=epoch) 
-   # wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
+    wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
+    decoder_performance(config, model, dataloaders['val'], epoch)
     del test_molembeds, test_specembeds
     model.train()
