@@ -351,8 +351,9 @@ def decoder_performance(config, model, dataloaders, epoch):
             acc.append(equal_count / spec.shape[0])
             validity.append(validity_count / spec.shape[0])
         print("Acc :",np.array(acc).mean(), " validity: ", np.array(validity).mean())
-    wandb.log({ "accuracy" : np.array(acc).mean() }, step=epoch)  
-    wandb.log({"validity":np.array(validity).mean()}, step=epoch) 
+    # wandb.log({ "accuracy" : np.array(acc).mean() }, step=epoch)  
+    # wandb.log({"validity":np.array(validity).mean()}, step=epoch) 
+    return np.array(acc).mean(), np.array(validity).mean()
         
 
 def clip_performance(config, model, dataloaders, epoch):
@@ -409,7 +410,9 @@ def clip_performance(config, model, dataloaders, epoch):
     plt.clf()
     wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
     plt.clf()
-    decoder_performance(config, model, dataloaders, epoch)
+    decoder_acc, decoder_validity = decoder_performance(config, model, dataloaders, epoch)
+    wandb.log({ "accuracy" : decoder_acc }, step=epoch)  
+    wandb.log({"validity":decoder_validity}, step=epoch)
     del test_molembeds, test_specembeds
     model.train()
     plt.clf()

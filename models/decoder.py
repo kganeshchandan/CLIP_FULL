@@ -116,11 +116,14 @@ class LatentToMol(nn.Module):
         self.hidden_size = hidden_size
         self.embed = nn.Embedding(len(vocab), hidden_size, padding_idx=vocab.pad_index)
         self.pe = PositionalEncodings(d_model=hidden_size, p_dropout=dropout, seq_len=seq_len)
+        self.pos_emb = nn.Parameter(torch.zeros(1, seq_len, hidden_size))
         self.classifier = nn.Linear(hidden_size, len(vocab))
         
         transformer_decoder_layer = nn.TransformerDecoderLayer(d_model=hidden_size,
                                                                nhead=n_heads,
                                                                dropout=dropout,
+                                                               norm_first=True,
+                                                               activation="gelu",
                                                                batch_first=True)
         
         self.trfmdecoder = nn.TransformerDecoder(decoder_layer=transformer_decoder_layer, 
@@ -134,13 +137,15 @@ class LatentToMol(nn.Module):
             ResidualBlock(hidden_size),
             nn.LeakyReLU()
             )
+        self.drop = nn.Dropout(0.1)
 
     def forward(self, latent, smi, tgt_mask=None, tgt_padding_mask=None):
         latent = self.latentencoder(latent)
         smi = self.embed(smi)
-        smi = self.res_block(smi)
-        smi = self.pe(smi)
-        
+        # smi = self.res_block(smi)
+        # smi = self.pe(smi)
+        pe = self.pos_emb[:,:self.seq_len,:].to(latent.device)
+        smi = self.drop(smi + pe)
         # smi = smi.permute
         x = self.trfmdecoder(
             tgt=smi,
@@ -148,7 +153,7 @@ class LatentToMol(nn.Module):
             tgt_key_padding_mask = tgt_padding_mask,
             tgt_mask = tgt_mask
         )
-        
+        x = self.ln_f(x)
         out = self.classifier(x)
         # out = F.log_softmax(out, 2)
         return out

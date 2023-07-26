@@ -164,7 +164,9 @@ class ParentDataset(Dataset):
         data = self.clip_dataset[item]
         
         sm = self.smiles_id_map[data['index'].item()]
-        sm = self.transform(sm)
+        
+        if self.transform:
+            sm = self.transform(sm)
         
         ir = self.ir_dict_norm[data['index'].item()]
         
@@ -236,7 +238,8 @@ def prepare_data(config):
                                   smiles_id_map=smiles_id_map, 
                                   ir_dict_norm=new_dict_norm, 
                                   seq_len=config['data']['seq_len'],
-                                  vocab=vocab 
+                                  vocab=vocab,
+                                  transform=None 
                                   )
     dataloaders = CreateDataloaders(final_dataset,
                                     sizes=config['data']['splits'], 
