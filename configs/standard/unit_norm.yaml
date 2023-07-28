@@ -44,7 +44,7 @@ spectra_encoder:
   patch_size: 7
   use_clf_token: true
 train:
-  checkpoint_dir: checkpoints/RUN_unit_norm
+  checkpoint_dir: checkpoints/RUN_unit_norm_fixed
   device: cuda
   lr: 0.0001
   num_epochs: 500
@@ -55,4 +55,4 @@ wandb:
   dir: /scratch/kanakala.ganesh/
   job_type: sample
   project_name: CLIP_Full
-  run_name: RUN_unit_norm
+  run_name: RUN_unit_norm_fixed

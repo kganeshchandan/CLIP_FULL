@@ -40,24 +40,31 @@ class LatentEncoder(nn.Module):
 
         self.featurizer = nn.Sequential(
             nn.Linear(in_size, 1024),
-            nn.Linear(1024, seq_len * hidden_size),
-            nn.LeakyReLU(),
+            nn.GELU(),
+            nn.Linear(1024, hidden_size),
+            nn.GELU(),
         )
-        self.final_featurizer = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.LeakyReLU(),
-            nn.Linear(hidden_size, hidden_size)
-        )
-    
     def forward(self, x):
-
         x = self.featurizer(x)
-        # x [b, seq_len * hidden_size]
-        x = x.view(-1, self.seq_len, self.hidden_size)
-        x = self.final_featurizer(x)
-
-        # returns batch, no_of_words, word_emb 
         return x
+    
+class bottle(nn.Module):
+    def __init__(self, seq_len, hidden_size):
+        super(bottle, self).__init__()
+        self.seq_len = seq_len
+        self.hidden_size = hidden_size
+        self.down = nn.Sequential(
+            nn.Linear(seq_len*hidden_size, 1024),
+            nn.LeakyReLU(),
+            nn.Linear(1024, hidden_size)
+        )
+        self.up = LatentEncoder(hidden_size, seq_len, hidden_size)
+        
+    def forward(self, inp):
+        inp = inp.view(-1, self.seq_len * self.hidden_size)
+        embed = self.down(inp)
+        out = self.up(embed)
+        return out
      
 class PositionalEncodings(nn.Module):
     """Attention is All You Need positional encoding layer"""
@@ -104,56 +111,65 @@ class ResidualBlock(nn.Module):
     
 class LatentToMol(nn.Module):
     def __init__(self, 
-                 in_size,
-                 hidden_size, 
-                 n_layers,
-                 n_heads, 
+                 in_size, 
+                 hidden_size,  
+                 n_layers, 
                  seq_len, 
                  vocab, 
+                 n_heads = 16, 
                  dropout=0.1):
-        
         super(LatentToMol, self).__init__()
+        self.in_size = in_size
         self.hidden_size = hidden_size
-        self.embed = nn.Embedding(len(vocab), hidden_size, padding_idx=vocab.pad_index)
+        self.seq_len = seq_len
+        self.vocab = vocab
+        self.embed = nn.Embedding(len(vocab), hidden_size)
         self.pe = PositionalEncodings(d_model=hidden_size, p_dropout=dropout, seq_len=seq_len)
         self.pos_emb = nn.Parameter(torch.zeros(1, seq_len, hidden_size))
+        
         self.classifier = nn.Linear(hidden_size, len(vocab))
         
-        transformer_decoder_layer = nn.TransformerDecoderLayer(d_model=hidden_size,
+
+        transformer_encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size,
                                                                nhead=n_heads,
                                                                dropout=dropout,
+                                                               batch_first=True,
                                                                norm_first=True,
-                                                               activation="gelu",
-                                                               batch_first=True)
-        
-        self.trfmdecoder = nn.TransformerDecoder(decoder_layer=transformer_decoder_layer, 
+                                                               activation="gelu")
+        self.trfmencoder = nn.TransformerEncoder(encoder_layer=transformer_encoder_layer,
                                                  num_layers=n_layers,
+                                                 norm=nn.LayerNorm(hidden_size)
                                                  )
-        self.latentencoder = LatentEncoder(in_size=in_size, 
+
+        self.specencoder = LatentEncoder(in_size=in_size, 
                                        hidden_size=hidden_size,
                                        dropout=dropout)
         
-        self.res_block = nn.Sequential(
-            ResidualBlock(hidden_size),
-            nn.LeakyReLU()
-            )
+        self.ln_f = nn.LayerNorm(hidden_size)
+        # self.bottle = bottle(seq_len, hidden_size)
         self.drop = nn.Dropout(0.1)
-
-    def forward(self, latent, smi, tgt_mask=None, tgt_padding_mask=None):
-        latent = self.latentencoder(latent)
+    def forward(self, spec, smi, tgt_mask=None, tgt_padding_mask=None):
+        spec = self.specencoder(spec) # [batch, hidden]
+        spec = spec.unsqueeze(1) # [batch, 1, hidden]
+        
         smi = self.embed(smi)
-        # smi = self.res_block(smi)
-        # smi = self.pe(smi)
-        pe = self.pos_emb[:,:self.seq_len,:].to(latent.device)
+        
+        pe = self.pos_emb[:,:self.seq_len,:].to(spec.device)
+        
         smi = self.drop(smi + pe)
+        # smi = self.pe(smi) # [batch, seqlen, hidden]
+ 
+        x = torch.cat([spec, smi], dim=1) # [batch, seqlen + 1, hidden]
+        tgt_mask = set_up_causal_mask(x.shape[1]).to(spec.device)
+        tgt_padding_mask = torch.cat([torch.zeros((x.shape[0],1), dtype=torch.bool).to(spec.device), tgt_padding_mask], dim=1)
+        # print(smi.shape)
         # smi = smi.permute
-        x = self.trfmdecoder(
-            tgt=smi,
-            memory=latent,
-            tgt_key_padding_mask = tgt_padding_mask,
-            tgt_mask = tgt_mask
+        x = self.trfmencoder(
+            src=x,
+            src_key_padding_mask = tgt_padding_mask,
+            mask = tgt_mask
         )
         x = self.ln_f(x)
         out = self.classifier(x)
         # out = F.log_softmax(out, 2)
-        return out
+        return out[:,:self.seq_len,:]

@@ -13,8 +13,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import Draw
 import seaborn as sns
-import plotly
-
+from architecture import CLIP
 from tqdm import tqdm
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -183,9 +182,9 @@ def update_logs_and_checkpoints(config, model, tl, vl, epoch, logs):
         logs['best_recon_epoch'] = epoch
         save_model(model, config, logs, 'best_recon')
               
-    for key in logs:
-        if not isinstance(logs[key], list):
-            wandb.log({key:logs[key]}, step=epoch)  
+    # for key in logs:
+    #     if not isinstance(logs[key], list):
+    #         wandb.log({key:logs[key]}, step=epoch)  
     return logs
 
 def print_status(logs, time=None):
@@ -306,7 +305,8 @@ def distance_distribution(molmat, specmat):
     nonpairs = ["others"] * len(sims)
     df = pd.DataFrame()
     df['distance'] = vals
-    df['labels'] = pairs + nonpairs
+    df['labels'] = nonpairs + pairs
+    plt.clf()
     plot = sns.histplot(df, x='distance', hue='labels', kde=True, bins=50)
     del sims, diagonals,  vals, df
     return plot
@@ -406,13 +406,16 @@ def clip_performance(config, model, dataloaders, epoch):
 
     # wandb.log({'Distance Distribution Train': distance_distribution(train_molembeds, train_specembeds)}, step=epoch) 
     # del train_molembeds, train_specembeds
-    wandb.log({'Distance Distribution Test': wandb.Image(distance_distribution(test_molembeds, test_specembeds))}, step=epoch) 
-    plt.clf()
-    wandb.log({'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))})
-    plt.clf()
     decoder_acc, decoder_validity = decoder_performance(config, model, dataloaders, epoch)
-    wandb.log({ "accuracy" : decoder_acc }, step=epoch)  
-    wandb.log({"validity":decoder_validity}, step=epoch)
+    # print("===================================================================================","HERE", decoder_acc, decoder_validity,)
+    wandb.log({"accuracy" : decoder_acc,
+               "validity": decoder_validity ,
+               'Distance Distribution Test': wandb.Image(distance_distribution(test_molembeds, test_specembeds)),
+               'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))
+               }, step=epoch)
+    
+
     del test_molembeds, test_specembeds
+
     model.train()
     plt.clf()

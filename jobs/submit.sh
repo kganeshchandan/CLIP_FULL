@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:2
 #SBATCH --mail-user=kanakala.ganesh@research.iiit.ac.in
 #SBATCH --mail-type=ALL
-#SBATCH --output=/home2/kanakala.ganesh/CLIP_PART_1/outputs/minmax_norm.txt
+#SBATCH --output=/home2/kanakala.ganesh/CLIP_PART_1/outputs/minmax_norm_fixed.txt
 
 #wget http://www.bindingmoad.org/files/biou/every_part_a.zip
 #wget http://www.bindingmoad.org/files/biou/every_part_b.zip
@@ -19,3 +19,4 @@
 cd ..
 
 python run.py configs/standard/minmax_norm.yaml
+#python run.py configs/standard/unit_norm.yaml

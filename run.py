@@ -6,6 +6,10 @@ import wandb
 import yaml
 import sys
 
+import warnings
+
+warnings.filterwarnings("ignore")
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 dtype = torch.float32
 
@@ -36,6 +40,7 @@ logs = {
             'best_clip_loss':1000,
             'best_recon_loss':1000
         }
+
 
 def run(config):
     with wandb.init(project= config['wandb']['project_name'],
