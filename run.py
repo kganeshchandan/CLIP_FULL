@@ -16,7 +16,8 @@ dtype = torch.float32
 from architecture import CLIP
 from train_utils import CombinedLoss
 from train_utils import train_clip, train_total, train_recon
-
+from train_utils import freeze_molecule_encoder, freeze_smiles_decoder, freeze_spectra_encoder
+from train_utils import unfreeze_molecule_encoder, unfreeze_spectra_encoder, unfreeze_smiles_decoder
 
 logs, max_charge, num_species = None, None, None
 logs = {
@@ -61,7 +62,7 @@ def run(config):
                                       lr = config['train']['lr'],
                                       weight_decay=config['train']['weight_decay'])
         vocab = pickle.load(open(config['data']['vocab_path'], 'rb'))
-        loss_fn = CombinedLoss(vocab).to(device)
+        loss_fn = CombinedLoss(vocab, type=config['train']['loss_type']).to(device)
         
         global logs
         
@@ -75,11 +76,25 @@ def run(config):
         print("Starting Training")
         
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
-        #train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 200)
-        #train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 200, 300)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,500)
         
+        # freeze_smiles_decoder(model)
+        # train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 500)
+        # unfreeze_smiles_decoder(model)
+        # freeze_molecule_encoder(model)
+        # freeze_spectra_encoder(model)
+        # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 500, 800)
+        # train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,500)
+        
+        freeze_molecule_encoder(model)
+        train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 200)
+        unfreeze_molecule_encoder(model)
+        freeze_smiles_decoder(model)
+        train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 200, 500)
+        unfreeze_smiles_decoder(model)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 500,700)
 
 if __name__ == '__main__':
     config = yaml.safe_load(open(sys.argv[1], 'r'))
+    config['wandb']['run_name'] = "first_spec_recon_next_molencoder_next_full"
+    config['train']['checkpoint_dir'] = "checkpoints/" + config['wandb']['run_name']
     run(config)

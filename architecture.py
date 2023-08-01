@@ -124,7 +124,7 @@ class CLIP(nn.Module):
         spec_latents = self.forward_spec(data)
         
         smile_preds = self.forward_decoder(data, spec_latents)
-        
+        # smile_preds = self.forward_decoder(data, mol_latents)
         return mol_latents, spec_latents, smile_preds, logits_scale, data['index'] 
         
         

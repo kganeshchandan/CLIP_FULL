@@ -25,16 +25,68 @@ import yaml
 import wandb
 import time
 
+def freeze_molecule_encoder(model):
+    for name, param in model.named_parameters():
+        if "Molecule_Encoder" in name:
+            param.requires_grad = False
+        print(name, param.requires_grad)
 
+def unfreeze_molecule_encoder(model):
+    for name, param in model.named_parameters():
+        if "Molecule_Encoder" in name:
+            param.requires_grad = True
+        print(name, param.requires_grad)
+        
+def freeze_spectra_encoder(model):
+    for name, param in model.named_parameters():
+        if "Spectra_Encoder" in name:
+            param.requires_grad = False
+        print(name, param.requires_grad)
 
+def unfreeze_spectra_encoder(model):
+    for name, param in model.named_parameters():
+        if "Spectra_Encoder" in name:
+            param.requires_grad = True
+        print(name, param.requires_grad)
+        
+def freeze_smiles_decoder(model):
+    for name, param in model.named_parameters():
+        if "smiles_decoder" in name:
+            param.requires_grad = False
+        print(name, param.requires_grad)
+
+def unfreeze_smiles_decoder(model):
+    for name, param in model.named_parameters():
+        if "smiles_decoder" in name:
+            param.requires_grad = True
+        print(name, param.requires_grad)
+          
+def nt_xent_loss(out_1, out_2, temperature):
+    out = torch.cat([out_1, out_2], dim=0)
+    n_samples = len(out)
+
+    # Full similarity matrix
+    cov = torch.mm(out, out.t().contiguous())
+    sim = torch.exp(cov / temperature)
+
+    mask = ~torch.eye(n_samples, device=sim.device).bool()
+    neg = sim.masked_select(mask).view(n_samples, -1).sum(dim=-1)
+
+    # Positive similarity
+    pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / temperature)
+    pos = torch.cat([pos, pos], dim=0)
+
+    loss = -torch.log(pos / neg).mean()
+    return loss
 
 class CombinedLoss(nn.Module):
     # under construction 
-    def __init__(self, vocab, temperature=1, threshold=0.8):
+    def __init__(self, vocab, temperature=1, threshold=0.8, type="default"):
         super().__init__()
         self.temperature = temperature
         self.threshold = threshold
         self.vocab = vocab
+        self.type = type
     
     def forward(self, mol_features, spectra_features, logit_scale, smile_ypred, data):
         # spectra = spectra.squeeze(1)
@@ -42,23 +94,18 @@ class CombinedLoss(nn.Module):
         # print(logit_scale)
         # print(mol_features.shape)
         # print(spectra_features.shape)
+        if self.type == "nt_xent":
+            clip_loss = nt_xent_loss(mol_features, spectra_features, self.temperature)
         
-        logits = logit_scale[0] *  mol_features @ spectra_features.t() 
-        
-        mol_sims = mol_features @ mol_features.t()
-        spectra_sims = spectra_features @ spectra_features.t()
-        # og_spectra_sims = spectra @ spectra.t()
-        
-        # targets = get_spec_mat(spectra, threshold=self.threshold)
-        targets = torch.diag(torch.ones(spectra_features.shape[0])).to(device)
-      
-        clip_loss = (F.cross_entropy(logits, targets) + 
-                     F.cross_entropy(logits.t(), targets.t())
-                     ) / 2
+        elif self.type == "default":
+            logits = logit_scale[0] *  mol_features @ spectra_features.t() 
+            targets = torch.diag(torch.ones(spectra_features.shape[0])).to(device)
+            clip_loss = (F.cross_entropy(logits, targets) + 
+                        F.cross_entropy(logits.t(), targets.t())
+                        ) / 2
         
         smile_y = data['decoder_tgt'].to(device)
         smile_yprob = F.log_softmax(smile_ypred, dim=2)
-        
         reconstruction_loss = F.nll_loss(smile_yprob.view(-1, len(self.vocab)),
                                         smile_y.view(-1))
         total_loss = clip_loss + reconstruction_loss
