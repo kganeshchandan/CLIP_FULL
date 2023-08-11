@@ -167,6 +167,7 @@ class ParentDataset(Dataset):
         
         if self.transform:
             sm = self.transform(sm)
+            print("SMILES WILL BE RANDOMIZED")
         
         ir = self.ir_dict_norm[data['index'].item()]
         
@@ -187,14 +188,15 @@ class ParentDataset(Dataset):
         
         return {
             "index": data['index'],
-            "decoder_inp":torch.tensor(inp_tokens),
-            "decoder_tgt":torch.tensor(tgt_tokens),
+            # "decoder_inp":torch.tensor(inp_tokens),
+            # "decoder_tgt":torch.tensor(tgt_tokens),
             "IR":torch.tensor(ir),
-            "tgt_padding_mask":tgt_padding_mask,
+            # "tgt_padding_mask":tgt_padding_mask,
             "num_atoms": data['num_atoms'],
             "charges":data["charges"],
             "positions" : data['positions'],
-            "one_hot" : data['one_hot']
+            "one_hot" : data['one_hot'],
+            "smiles": torch.tensor(X)
         }
         
 def CreateDataloaders( dataset, sizes = [0.8, 0.1, 0.1], batch_size=128, num_workers=16, shuffle=True):
@@ -204,6 +206,8 @@ def CreateDataloaders( dataset, sizes = [0.8, 0.1, 0.1], batch_size=128, num_wor
     # val_size = len(dataset) - train_size - test_size
     train_size = 97792
     val_size = 12288
+    # train_size = 100000
+    # val_size = 20000
     test_size = len(dataset) - train_size - val_size
     
     train , test, val = torch.utils.data.random_split(dataset, [train_size, test_size, val_size])

@@ -106,15 +106,8 @@ class CLIP(nn.Module):
         return spectra_features
     
     def forward_decoder(self, data, spec_latents):
-        smi = data['decoder_inp'].to(device)
-        tgt = data['decoder_tgt'].to(device)
-        tgt_padding_mask = data['tgt_padding_mask'].to(device)
-        tgt_mask = set_up_causal_mask(self.config['data']['seq_len']).to(device)
-        
-        pred = self.smiles_decoder(spec_latents,
-                                   smi,
-                                   tgt_mask,
-                                   tgt_padding_mask)
+        smi = data['smiles'].to(device)[:,:-1]        
+        pred = self.smiles_decoder(spec_latents, smi)
         return pred
         
     def forward(self, data):

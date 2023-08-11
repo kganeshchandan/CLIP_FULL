@@ -5,7 +5,7 @@ import pickle
 import wandb
 import yaml
 import sys
-
+import numpy as np
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -42,7 +42,13 @@ logs = {
             'best_recon_loss':1000
         }
 
-
+def make_deterministic(random_seed = 0):
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed(random_seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(random_seed)
+    
 def run(config):
     with wandb.init(project= config['wandb']['project_name'],
                     dir= config['wandb']['dir'],
@@ -78,15 +84,15 @@ def run(config):
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
         
         # freeze_smiles_decoder(model)
-        # train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 500)
+        train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 600)
         # unfreeze_smiles_decoder(model)
         # freeze_molecule_encoder(model)
         # freeze_spectra_encoder(model)
         # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 500, 800)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,600)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 600,1200)
         
         # freeze_molecule_encoder(model)
-        # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 200)
+        # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 500)
         # unfreeze_molecule_encoder(model)
         # freeze_smiles_decoder(model)
         # freeze_spectra_encoder(model)
@@ -96,7 +102,8 @@ def run(config):
         # train_total(config, model, dataloaders, optimizer, loss_fn, logs, 500,700)
 
 if __name__ == '__main__':
+    make_deterministic(0)
     config = yaml.safe_load(open(sys.argv[1], 'r'))
-    # config['wandb']['run_name'] = "first_spec_recon_next_molencoder_next_full"
+    # config['wandb']['run_name'] = "SpecEncoder_and_Decoder_Only"
     # config['train']['checkpoint_dir'] = "checkpoints/" + config['wandb']['run_name']
     run(config)

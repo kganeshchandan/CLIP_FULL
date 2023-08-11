@@ -51,6 +51,7 @@ train:
   temperature: 1
   threshold: 0.9999
   weight_decay: 1.0e-06
+  loss_type: default
 wandb:
   dir: /scratch/kanakala.ganesh/
   job_type: sample

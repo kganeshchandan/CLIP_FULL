@@ -104,10 +104,12 @@ class CombinedLoss(nn.Module):
                         F.cross_entropy(logits.t(), targets.t())
                         ) / 2
         
-        smile_y = data['decoder_tgt'].to(device)
+        smile_y = data['smiles'].to(device)[:,1:]
         smile_yprob = F.log_softmax(smile_ypred, dim=2)
-        reconstruction_loss = F.nll_loss(smile_yprob.view(-1, len(self.vocab)),
-                                        smile_y.view(-1))
+        # reconstruction_loss = F.nll_loss(smile_yprob.view(-1, len(self.vocab)),
+        #                                 smile_y.view(-1))
+        reconstruction_loss = F.cross_entropy(smile_ypred.view(-1, len(self.vocab)),
+                                              smile_y.contiguous().view(-1))
         total_loss = clip_loss + reconstruction_loss
         
         return total_loss, clip_loss, reconstruction_loss
@@ -191,10 +193,10 @@ def save_model(model, config, logs, name):
         
     print("Saved to {}".format(path_dir))
     
-def load_model(path_to_dir):
+def load_model(path_to_dir, type="best_total"):
     files = os.listdir(path_to_dir)
     for file in files:
-        if '.pth' in file:      
+        if type +'.pth' in file:      
             model_path = path_to_dir + '/' + file
         if '.yaml' in file:
             config_path = path_to_dir + '/' + file
@@ -202,6 +204,8 @@ def load_model(path_to_dir):
         config = yaml.full_load(f)
         
     model = CLIP(config)
+    model.to(device)
+    model = torch.nn.parallel.DataParallel(model)
     model.load_state_dict(torch.load(model_path))
     return model
 
@@ -365,47 +369,134 @@ def distance_mat(molmat, specmat):
     del sims
     return img
 
-def decoder_performance(config, model, dataloaders, epoch):
-    model.eval()
-    vocab = pickle.load(open(config['data']['vocab_path'], 'rb'))
-    acc = []
-    validity = []
+PAD = 0
+UNK = 1
+EOS = 2
+SOS = 3
+MASK = 4
+
+class Sampler():
+    def __init__(self, model, vocab):
+        self.model = model
+        self.vocab = vocab
+        self.max_len = 40
+    def sample(self, embed, greedy_decode=False):
+        embed = embed.unsqueeze(0).to(device)
+        self.model.eval()
+        sample_tensor = torch.zeros((1,self.max_len), dtype=torch.int64).to(device)
+        sample_tensor[0,0] = SOS
+        with torch.no_grad():
+            for i in range(0,self.max_len-1):
+                tensor = sample_tensor[:,:i+1]
+                logits = self.model.forward(embed, tensor)[:,-1,:]
+                probabilities = F.softmax(logits, dim=1)
+                sampled_char = torch.multinomial(probabilities,1).item()
+                if greedy_decode:
+                    sampled_char = torch.argmax(probabilities)
+                    
+                sample_tensor[0,i+1] = sampled_char
+                if sampled_char == EOS:
+                    break
+            smiles = ""
+            chars = self.vocab.from_seq(sample_tensor[0])
+            for char in chars:
+                if char != "<pad>" and char != "<eos>" and char != "<sos>" and char != "<unk>":
+                    smiles += char
+            
+        return smiles
+  
+    def sample_multi(self, n, embed, greedy_decode=False):
+        smiles_list = []
+        for i in range(n):
+            smiles_list.append(self.sample(embed, greedy_decode))
+        return smiles_list
+    
+from rdkit import Chem
+from rdkit.Chem import RDConfig
+from rdkit.Chem import AllChem
+from rdkit.Chem import Draw
+from rdkit.Chem.Draw import rdDepictor, rdMolDraw2D
+opts = Draw.DrawingOptions()
+Draw.SetComicMode(opts)
+
+def calculate_decoder_accuracy( model, dataloaders, k=1):
+    pred_smiles_list = []
+    og_smiles_list = []
+    count = 0
+    sampler = Sampler(model.module.smiles_decoder, model.module.vocab)
     with torch.no_grad():
         for i, data in tqdm(enumerate(dataloaders['val'])):
             data = {k: v.to(device) for k, v in data.items()}
-            smi = data['decoder_inp']
-            y = data['decoder_tgt']
-            _, spec, pred, _, _ = model(data)
-            # spec = model.forward_spec(data)
-            # pred = model.forward_decoder(data, spec)
-            y_pred = torch.argmax(pred, dim=2)
-            equal_count= 0
-            validity_count = 0
-            for i in range(spec.shape[0]):
+            spec_latents = model.module.forward_spec(data)
+            for spec, og in zip(spec_latents, data['smiles'] ):
+                ls = sampler.sample_multi(k,spec,greedy_decode=True)
+                generated_smiles = []
+                for smi in ls:
+                    try:
+                        generated_smiles.append(Chem.CanonSmiles(smi))
+                    except:
+                        pass
                 og_smile = ""
-                for char in vocab.from_seq(y[i]):
-                    if char != "<pad>" and char != "<eos>":
+                chars = model.module.vocab.from_seq(og)
+                for char in chars:
+                    if char != "<pad>" and char != "<eos>" and char != "<sos>" and char != "<unk>":
                         og_smile += char
-                pred_smile = ""
-                for char in vocab.from_seq(y_pred[i]):
-                    if char != "<pad>" and char != "<eos>":
-                        pred_smile += char
-                if og_smile == pred_smile:
-                    equal_count  += 1
-                m = Chem.MolFromSmiles(pred_smile)
-                if m is not None:
-                    validity_count += 1
-            acc.append(equal_count / spec.shape[0])
-            validity.append(validity_count / spec.shape[0])
-        print("Acc :",np.array(acc).mean(), " validity: ", np.array(validity).mean())
-    # wandb.log({ "accuracy" : np.array(acc).mean() }, step=epoch)  
-    # wandb.log({"validity":np.array(validity).mean()}, step=epoch) 
-    return np.array(acc).mean(), np.array(validity).mean()
-        
+                og_smile = Chem.CanonSmiles(og_smile)
+                
+                if og_smile in generated_smiles:
+                    count += 1
+                
+                og_smiles_list.append(og_smile)
+                pred_smiles_list.append(generated_smiles)
+        print("No of Hits : ",count)
+
+        return count / len(og_smiles_list)
+    
+def decoder_performance(config, model, dataloaders, epoch):
+    for i, data in enumerate(dataloaders["val"]):
+        data = {k: v.to(device) for k, v in data.items()}
+        break
+    spec_latent = model.module.forward_spec(data)
+    one_hot = data['smiles'].to(device)
+    
+    arr = np.array([])
+    vocab = pickle.load(open(config['data']['vocab_path'], 'rb'))
+    for i in range(4) :
+        index = torch.randint(0,spec_latent.shape[0], (1,))[0].item()
+        sampler = Sampler(model.module.smiles_decoder, model.module.vocab)
+        smiles_list = sampler.sample_multi(10, spec_latent[index])
+        parsed_mols = np.array([Chem.MolFromSmiles(s) for s in smiles_list])
+        print("Percentage invalid", (parsed_mols == None).sum()/len(parsed_mols))
+
+        og_smiles = ""
+        chars = model.module.vocab.from_seq(one_hot[index])
+        for char in chars:
+            if char != "<pad>" and char != "<eos>" and char != "<sos>" and char != "<unk>":
+                og_smiles += char
+
+        og_mol = Chem.MolFromSmiles(og_smiles)
+        all_mols = np.array([og_mol] + list(parsed_mols))
+        arr = np.concatenate((arr, all_mols), axis=0)
+    img = Draw.MolsToGridImage(arr, molsPerRow=11, returnPNG=False)
+    wandb.log({"Spectra Conditioned smiles decoding": wandb.Image(img)}, step=epoch)
+    
+    index = torch.randint(0,spec_latent.shape[0], (1,))[0].item()
+    sampler = Sampler(model.module.smiles_decoder, vocab)
+    smiles_list = sampler.sample_multi(100, spec_latent[index])
+    parsed_mols = np.array([Chem.MolFromSmiles(s) for s in smiles_list])
+    print("Percentage invalid", (parsed_mols == None).sum()/len(parsed_mols))
+    print("==============================")
+    wandb.log({"Invalid Molecules percentage": (parsed_mols == None).sum()/len(parsed_mols)}, step=epoch)
+    return img    
 
 def clip_performance(config, model, dataloaders, epoch):
+    
     # model.to(device)
     model.eval()
+    plt.clf()
+    img = decoder_performance(config, model, dataloaders, epoch)
+    plt.clf()
+    
     max_charge = config['data']['max_charge']
     num_species = config['data']['num_species']
 
@@ -453,12 +544,12 @@ def clip_performance(config, model, dataloaders, epoch):
 
     # wandb.log({'Distance Distribution Train': distance_distribution(train_molembeds, train_specembeds)}, step=epoch) 
     # del train_molembeds, train_specembeds
-    decoder_acc, decoder_validity = decoder_performance(config, model, dataloaders, epoch)
+    
     # print("===================================================================================","HERE", decoder_acc, decoder_validity,)
-    wandb.log({"accuracy" : decoder_acc,
-               "validity": decoder_validity ,
+    wandb.log({
                'Distance Distribution Test': wandb.Image(distance_distribution(test_molembeds, test_specembeds)),
-               'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds))
+               'Similarity Matrix Test':wandb.Image(distance_mat(test_specembeds, test_molembeds)),
+               'Decoding Accuracy': calculate_decoder_accuracy(model, dataloaders,k=1)
                }, step=epoch)
     
 
