@@ -204,10 +204,10 @@ def CreateDataloaders( dataset, sizes = [0.8, 0.1, 0.1], batch_size=128, num_wor
     # train_size = int(len(dataset)*sizes[0])
     # test_size = int(len(dataset)*(sizes[1]))
     # val_size = len(dataset) - train_size - test_size
-    train_size = 97792
-    val_size = 12288
-    # train_size = 100000
-    # val_size = 20000
+    # train_size = 97792
+    # val_size = 12288
+    train_size = 100000
+    val_size = 20000
     test_size = len(dataset) - train_size - val_size
     
     train , test, val = torch.utils.data.random_split(dataset, [train_size, test_size, val_size])
