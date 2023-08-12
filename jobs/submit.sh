@@ -3,13 +3,13 @@
 #SBATCH --job-name=Final-MULTIGPU
 #SBATCH -A plafnet2
 #SBATCH -p plafnet2
-#SBATCH -c 40
+#SBATCH -c 38
 #SBATCH --mem-per-cpu=2G
 #SBATCH --time=4-00:00:00
 #SBATCH --gres=gpu:2
 #SBATCH --mail-user=kanakala.ganesh@research.iiit.ac.in
 #SBATCH --mail-type=ALL
-#SBATCH --output=/home2/kanakala.ganesh/CLIP_PART_1/outputs/FULL_CLIP_DECODER.txt
+#SBATCH --output=/home2/kanakala.ganesh/CLIP_PART_1/outputs/FULL_COMBINED.txt
 
 #wget http://www.bindingmoad.org/files/biou/every_part_a.zip
 #wget http://www.bindingmoad.org/files/biou/every_part_b.zip

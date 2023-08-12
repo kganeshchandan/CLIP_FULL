@@ -233,6 +233,7 @@ def update_logs_and_checkpoints(config, model, tl, vl, epoch, logs):
         logs['best_recon_epoch'] = epoch
         save_model(model, config, logs, 'best_recon')
               
+    save_model(model, config, logs, 'best_latest')
     # for key in logs:
     #     if not isinstance(logs[key], list):
     #         wandb.log({key:logs[key]}, step=epoch)  
@@ -265,8 +266,11 @@ def train_clip(config, model, dataloaders, optimizer, loss_fn, logs, start=0, nu
             },
             step = epoch
         )
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
             clip_performance(config, model, dataloaders, epoch)
+        elif epoch > 450 and epoch % 10 == 0:
+            clip_performance(config, model, dataloaders, epoch)
+            
         print_status(logs, end-start)
     return logs
 
@@ -290,7 +294,9 @@ def train_recon(config, model, dataloaders, optimizer, loss_fn, logs, start=0, n
             },
             step = epoch
         )
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
+            clip_performance(config, model, dataloaders, epoch)
+        elif epoch > 450 and epoch % 10 == 0:
             clip_performance(config, model, dataloaders, epoch)
         print_status(logs, end-start)
     return logs
@@ -315,7 +321,9 @@ def train_total(config, model, dataloaders, optimizer, loss_fn, logs, start=0, n
             },
             step = epoch
         )
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
+            clip_performance(config, model, dataloaders, epoch)
+        elif epoch > 450 and epoch % 10 == 0:
             clip_performance(config, model, dataloaders, epoch)
         print_status(logs, end-start)
     return logs
@@ -502,16 +510,21 @@ def clip_performance(config, model, dataloaders, epoch):
 
     molembeds = []
     specembeds = []
+    val_ids = []
     with torch.no_grad():
         for i, data in tqdm(enumerate(dataloaders['val'])):    
             data = {k: v.to(device) for k, v in data.items()}
             mol_latents, spec_latents, smile_preds, logit_scale, ids = model(data)
             molembeds.append(mol_latents.detach().cpu())
             specembeds.append(spec_latents.detach().cpu())
+            val_ids.append(ids.detach().cpu())
         del mol_latents, spec_latents, smile_preds, logit_scale, ids
 
     test_molembeds = torch.cat(molembeds, 0)
     test_specembeds = torch.cat(specembeds, 0)
+    
+    val_ids = torch.cat(val_ids, 0)
+    pickle.dump(val_ids, open(config['train']['checkpoint_dir'] + '/val_ids.pickle', 'wb'))
     
     molembeds = []
     specembeds = []

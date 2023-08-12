@@ -84,15 +84,15 @@ def run(config):
         wandb.watch(model, loss_fn, log='all', log_freq=100, log_graph=True)
         
         # freeze_smiles_decoder(model)
-        train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 600)
+        # train_clip(config, model, dataloaders, optimizer, loss_fn, logs, 0, 600)
         # unfreeze_smiles_decoder(model)
         # freeze_molecule_encoder(model)
         # freeze_spectra_encoder(model)
         # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 500, 800)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 600,1200)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,1000)
         
         # freeze_molecule_encoder(model)
-        # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 500)
+        # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 600)
         # unfreeze_molecule_encoder(model)
         # freeze_smiles_decoder(model)
         # freeze_spectra_encoder(model)

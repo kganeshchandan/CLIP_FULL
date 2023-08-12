@@ -44,7 +44,7 @@ spectra_encoder:
   patch_size: 7
   use_clf_token: true
 train:
-  checkpoint_dir: checkpoints/FULL_CLIP_DECODER
+  checkpoint_dir: checkpoints/FULL_COMBINED
   device: cuda
   lr: 0.0001
   num_epochs: 500
@@ -56,4 +56,4 @@ wandb:
   dir: /scratch/kanakala.ganesh/
   job_type: sample
   project_name: CLIP_Full
-  run_name: FULL_CLIP_DECODER
+  run_name: FULL_COMBINED
