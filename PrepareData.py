@@ -156,6 +156,8 @@ class ParentDataset(Dataset):
         self.transform = transform
         self.max_charge = max_charge
         self.num_species = num_species
+        if self.transform:
+            print("SMILES WILL BE RANDOMIZED")
         
     def __len__(self):
         return len(self.clip_dataset)
@@ -167,7 +169,6 @@ class ParentDataset(Dataset):
         
         if self.transform:
             sm = self.transform(sm)
-            print("SMILES WILL BE RANDOMIZED")
         
         ir = self.ir_dict_norm[data['index'].item()]
         
@@ -243,7 +244,7 @@ def prepare_data(config):
                                   ir_dict_norm=new_dict_norm, 
                                   seq_len=config['data']['seq_len'],
                                   vocab=vocab,
-                                  transform=None 
+                                  transform=None
                                   )
     dataloaders = CreateDataloaders(final_dataset,
                                     sizes=config['data']['splits'], 

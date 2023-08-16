@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:2
 #SBATCH --mail-user=kanakala.ganesh@research.iiit.ac.in
 #SBATCH --mail-type=ALL
-#SBATCH --output=/home2/kanakala.ganesh/CLIP_PART_1/outputs/OG_UNITNORM.txt
+#SBATCH --output=/home2/kanakala.ganesh/CLIP_PART_1/outputs/FULL_COMBINED_RANDOM_SMILES.txt
 
 #wget http://www.bindingmoad.org/files/biou/every_part_a.zip
 #wget http://www.bindingmoad.org/files/biou/every_part_b.zip
