@@ -244,7 +244,7 @@ def prepare_data(config):
                                   ir_dict_norm=new_dict_norm, 
                                   seq_len=config['data']['seq_len'],
                                   vocab=vocab,
-                                  transform=None
+                                  transform=Randomizer()
                                   )
     dataloaders = CreateDataloaders(final_dataset,
                                     sizes=config['data']['splits'], 

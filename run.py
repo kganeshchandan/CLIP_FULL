@@ -89,7 +89,7 @@ def run(config):
         # freeze_molecule_encoder(model)
         # freeze_spectra_encoder(model)
         # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 500, 800)
-        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,1000)
+        train_total(config, model, dataloaders, optimizer, loss_fn, logs, 000,600)
         
         # freeze_molecule_encoder(model)
         # train_recon(config, model, dataloaders, optimizer, loss_fn, logs, 000, 600)

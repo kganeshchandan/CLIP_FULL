@@ -450,9 +450,12 @@ def calculate_decoder_accuracy( model, dataloaders, k=1):
                 for char in chars:
                     if char != "<pad>" and char != "<eos>" and char != "<sos>" and char != "<unk>":
                         og_smile += char
-                og_smile = Chem.CanonSmiles(og_smile)
-                
-                if og_smile in generated_smiles:
+                try:
+                    og_smile = Chem.CanonSmiles(og_smile)
+                except:
+                    og_smile=None
+                    
+                if og_smile is not None and og_smile in generated_smiles:
                     count += 1
                 
                 og_smiles_list.append(og_smile)
